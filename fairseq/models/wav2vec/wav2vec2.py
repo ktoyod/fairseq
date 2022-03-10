@@ -288,6 +288,7 @@ class Wav2Vec2Config(FairseqDataclass):
         metadata={"help": "Positional encoding type to use in conformer"},
     )
     fp16: bool = field(default=False, metadata={"help": "If fp16 is being used"})
+    in_d: int = field(default=1, metadata={"help": "input dimension"})
 
 
 @register_model("wav2vec2", dataclass=Wav2Vec2Config)
@@ -296,7 +297,11 @@ class Wav2Vec2Model(BaseFairseqModel):
         super().__init__()
         self.cfg = cfg
 
+        # cfg.conv_feature_layers
+        # format: [(dim, kernel_size, stride), ...]
+        # default: [(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]
         feature_enc_layers = eval(cfg.conv_feature_layers)
+        # => [(512, 10, 5), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 2, 2), (512, 2, 2)]
         self.embed = feature_enc_layers[-1][0]
 
         self.feature_extractor = ConvFeatureExtractionModel(
@@ -304,6 +309,7 @@ class Wav2Vec2Model(BaseFairseqModel):
             dropout=0.0,
             mode=cfg.extractor_mode,
             conv_bias=cfg.conv_bias,
+            in_d=cfg.in_d,
         )
 
         self.post_extract_proj = (
@@ -823,6 +829,7 @@ class ConvFeatureExtractionModel(nn.Module):
         dropout: float = 0.0,
         mode: str = "default",
         conv_bias: bool = False,
+        in_d: int = 1,
     ):
         super().__init__()
 
@@ -838,6 +845,8 @@ class ConvFeatureExtractionModel(nn.Module):
             conv_bias=False,
         ):
             def make_conv():
+                # NOTE: Conv1dでいいんだっけ？？
+                # refer: https://stackoverflow.com/questions/42883547/intuitive-understanding-of-1d-2d-and-3d-convolutions-in-convolutional-neural-n
                 conv = nn.Conv1d(n_in, n_out, k, stride=stride, bias=conv_bias)
                 nn.init.kaiming_normal_(conv.weight)
                 return conv
@@ -867,7 +876,7 @@ class ConvFeatureExtractionModel(nn.Module):
             else:
                 return nn.Sequential(make_conv(), nn.Dropout(p=dropout), nn.GELU())
 
-        in_d = 1
+        # in_d = 1  # NOTE: inputの次元は引数で取るようにする
         self.conv_layers = nn.ModuleList()
         for i, cl in enumerate(conv_layers):
             assert len(cl) == 3, "invalid conv definition: " + str(cl)
