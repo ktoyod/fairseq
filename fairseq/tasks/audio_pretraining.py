@@ -159,8 +159,10 @@ class AudioPretrainingTask(FairseqTask):
                 **self._get_mask_precompute_kwargs(task_cfg),
             )
         else:
+            # NOTE: train.tsv, valid_tsvなどのファイルが存在
             manifest_path = os.path.join(data_path, "{}.tsv".format(split))
 
+            # NOTE: ここでデータセットを読み込んでいる
             self.datasets[split] = FileAudioDataset(
                 manifest_path=manifest_path,
                 sample_rate=task_cfg.get("sample_rate", self.cfg.sample_rate),

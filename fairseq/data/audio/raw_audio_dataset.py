@@ -62,14 +62,16 @@ class RawAudioDataset(FairseqDataset):
     def __len__(self):
         return len(self.sizes)
 
+    # NOTE: ここでfeatsを1次元にしている
     def postprocess(self, feats, curr_sample_rate):
-        if feats.dim() == 2:
-            feats = feats.mean(-1)
+        # NOTE: 2次元のまま処理したい
+        # if feats.dim() == 2:
+        #     feats = feats.mean(-1)
 
         if curr_sample_rate != self.sample_rate:
             raise Exception(f"sample rate: {curr_sample_rate}, need {self.sample_rate}")
 
-        assert feats.dim() == 1, feats.dim()
+        # assert feats.dim() == 1, feats.dim()
 
         if self.normalize:
             with torch.no_grad():
@@ -245,6 +247,7 @@ class RawAudioDataset(FairseqDataset):
             )
 
 
+# NOTE: ここがデータセットを準備しているところ
 class FileAudioDataset(RawAudioDataset):
     def __init__(
         self,
@@ -279,10 +282,10 @@ class FileAudioDataset(RawAudioDataset):
         self.skipped_indices = set()
 
         with open(manifest_path, "r") as f:
-            self.root_dir = f.readline().strip()
+            self.root_dir = f.readline().strip()  # e.g. "/workspace/data/LibriSpeech/dev-clean"
             for i, line in enumerate(f):
                 items = line.strip().split("\t")
-                assert len(items) == 2, line
+                assert len(items) == 2, line  # e.g. ["dev-clean/.../xxxx-xxxx.flac", "67600"]
                 sz = int(items[1])
                 if min_sample_size is not None and sz < min_sample_size:
                     skipped += 1
@@ -297,6 +300,7 @@ class FileAudioDataset(RawAudioDataset):
         try:
             import pyarrow
 
+            # NOTE: パフォーマンスの高いArray
             self.fnames = pyarrow.array(self.fnames)
         except:
             logger.debug(
@@ -312,14 +316,18 @@ class FileAudioDataset(RawAudioDataset):
         fn = self.fnames[index]
         fn = fn if isinstance(self.fnames, list) else fn.as_py()
         fn = self.text_compressor.decompress(fn)
-        path_or_fp = os.path.join(self.root_dir, fn)
+        path_or_fp = os.path.join(self.root_dir, fn)  # e.g. "/workspace/data/.../xxxx-xxxx.flac"
         _path, slice_ptr = parse_path(path_or_fp)
         if len(slice_ptr) == 2:
             byte_data = read_from_stored_zip(_path, slice_ptr[0], slice_ptr[1])
             assert is_sf_audio_data(byte_data)
             path_or_fp = io.BytesIO(byte_data)
 
+        # refer: https://pysoundfile.readthedocs.io/en/latest/#module-soundfile
         wav, curr_sample_rate = sf.read(path_or_fp, dtype="float32")
+
+        # NOTE: 2次元に変換するために追加
+        wav = np.array([wav for _ in range(2)])
 
         feats = torch.from_numpy(wav).float()
         feats = self.postprocess(feats, curr_sample_rate)
