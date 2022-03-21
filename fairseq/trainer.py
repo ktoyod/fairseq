@@ -715,6 +715,7 @@ class Trainer(object):
             grouped_shuffling=self.cfg.dataset.grouped_shuffling,
             update_epoch_batch_itr=self.cfg.dataset.update_epoch_batch_itr,
         )
+        # NOTE: ここが呼ばれる
         self.reset_dummy_batch(batch_iterator.first_batch)
         return batch_iterator
 

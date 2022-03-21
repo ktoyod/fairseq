@@ -145,6 +145,7 @@ class RawAudioDataset(FairseqDataset):
         for i, (source, size) in enumerate(zip(sources, sizes)):
             diff = size - target_size
             if diff == 0:
+                # NOTE: ここでエラー
                 collated_sources[i] = source
             elif diff < 0:
                 assert self.pad
