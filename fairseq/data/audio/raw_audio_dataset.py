@@ -133,17 +133,24 @@ class RawAudioDataset(FairseqDataset):
         sources = [s["source"] for s in samples]
         sizes = [len(s) for s in sources]
 
+        # logger.info(f"===== sources =====\n{sources[:3]}")
+        # logger.info(f"===== sizes =====\n{sizes[:3]}")
+
         if self.pad:
             target_size = min(max(sizes), self.max_sample_size)
         else:
             target_size = min(min(sizes), self.max_sample_size)
 
-        collated_sources = sources[0].new_zeros(len(sources), target_size)
+        # logger.info(f"===== target_size =====\n{target_size}")
+
+        collated_sources = sources[0].new_zeros(len(sources), target_size, sources[0].shape[1])
         padding_mask = (
             torch.BoolTensor(collated_sources.shape).fill_(False) if self.pad else None
         )
         for i, (source, size) in enumerate(zip(sources, sizes)):
             diff = size - target_size
+            # logger.info(f"===== collated_sources[i] =====\n{collated_sources[i]}")
+            # logger.info(f"===== source =====\n{source}")
             if diff == 0:
                 # NOTE: ここでエラー
                 collated_sources[i] = source
@@ -328,7 +335,7 @@ class FileAudioDataset(RawAudioDataset):
         wav, curr_sample_rate = sf.read(path_or_fp, dtype="float32")
 
         # NOTE: 2次元に変換するために追加
-        wav = np.array([wav for _ in range(2)])
+        wav = np.array([[w, w] for w in wav])
 
         feats = torch.from_numpy(wav).float()
         feats = self.postprocess(feats, curr_sample_rate)
