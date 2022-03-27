@@ -597,6 +597,7 @@ class Wav2Vec2Model(BaseFairseqModel):
     ):
 
         if self.feature_grad_mult > 0:
+            print(f"=============== source ===============\n{source}")  # DEBUG
             features = self.feature_extractor(source)
             if self.feature_grad_mult != 1.0:
                 features = GradMultiply.apply(features, self.feature_grad_mult)
@@ -881,6 +882,7 @@ class ConvFeatureExtractionModel(nn.Module):
         for i, cl in enumerate(conv_layers):
             assert len(cl) == 3, "invalid conv definition: " + str(cl)
             (dim, k, stride) = cl
+            print(f"=============== cl ===============\n{cl}")  # DEBUG
 
             self.conv_layers.append(
                 block(
