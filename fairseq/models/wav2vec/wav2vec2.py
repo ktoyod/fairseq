@@ -101,6 +101,7 @@ class Wav2Vec2Config(FairseqDataclass):
         default=False, metadata={"help": "apply layernorm first in the transformer"}
     )
     conv_feature_layers: str = field(
+        # default="[(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]",
         default="[(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]",
         metadata={
             "help": "string describing convolutional feature extraction layers in form of a python list that contains "
@@ -848,7 +849,7 @@ class ConvFeatureExtractionModel(nn.Module):
             def make_conv():
                 # NOTE: Conv1dでいいんだっけ？？
                 # refer: https://stackoverflow.com/questions/42883547/intuitive-understanding-of-1d-2d-and-3d-convolutions-in-convolutional-neural-n
-                conv = nn.Conv1d(n_in, n_out, k, stride=stride, bias=conv_bias)
+                conv = nn.Conv2d(n_in, n_out, k, stride=stride, bias=conv_bias)
                 nn.init.kaiming_normal_(conv.weight)
                 return conv
 
@@ -880,7 +881,7 @@ class ConvFeatureExtractionModel(nn.Module):
         # in_d = 1  # NOTE: inputの次元は引数で取るようにする
         self.conv_layers = nn.ModuleList()
         for i, cl in enumerate(conv_layers):
-            assert len(cl) == 3, "invalid conv definition: " + str(cl)
+            # assert len(cl) == 3, "invalid conv definition: " + str(cl)
             (dim, k, stride) = cl
             print(f"=============== cl ===============\n{cl}")  # DEBUG
 
@@ -909,7 +910,7 @@ class ConvFeatureExtractionModel(nn.Module):
 
 
 def make_conv_pos(e, k, g):
-    pos_conv = nn.Conv1d(
+    pos_conv = nn.Conv2d(
         e,
         e,
         kernel_size=k,
@@ -973,7 +974,7 @@ class TransformerEncoder(nn.Module):
                 return nn.Sequential(
                     *[
                         nn.Sequential(
-                            nn.Conv1d(
+                            nn.Conv2d(
                                 e,
                                 e,
                                 kernel_size=k,
