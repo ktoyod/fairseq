@@ -299,6 +299,7 @@ class FairseqTask(object):
             required_batch_size_multiple=required_batch_size_multiple,
         )
 
+        # NOTE: Iteratorはここで作成
         # return a reusable, sharded iterator
         epoch_iter = iterators.EpochBatchIterator(
             dataset=dataset,

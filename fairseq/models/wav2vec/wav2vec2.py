@@ -101,6 +101,7 @@ class Wav2Vec2Config(FairseqDataclass):
         default=False, metadata={"help": "apply layernorm first in the transformer"}
     )
     conv_feature_layers: str = field(
+        # default="[(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]",
         default="[(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]",
         metadata={
             "help": "string describing convolutional feature extraction layers in form of a python list that contains "
@@ -288,6 +289,7 @@ class Wav2Vec2Config(FairseqDataclass):
         metadata={"help": "Positional encoding type to use in conformer"},
     )
     fp16: bool = field(default=False, metadata={"help": "If fp16 is being used"})
+    in_d: int = field(default=1, metadata={"help": "input dimension"})
 
 
 @register_model("wav2vec2", dataclass=Wav2Vec2Config)
@@ -296,7 +298,11 @@ class Wav2Vec2Model(BaseFairseqModel):
         super().__init__()
         self.cfg = cfg
 
+        # cfg.conv_feature_layers
+        # format: [(dim, kernel_size, stride), ...]
+        # default: [(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]
         feature_enc_layers = eval(cfg.conv_feature_layers)
+        # => [(512, 10, 5), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 2, 2), (512, 2, 2)]
         self.embed = feature_enc_layers[-1][0]
 
         self.feature_extractor = ConvFeatureExtractionModel(
@@ -304,6 +310,7 @@ class Wav2Vec2Model(BaseFairseqModel):
             dropout=0.0,
             mode=cfg.extractor_mode,
             conv_bias=cfg.conv_bias,
+            in_d=cfg.in_d,
         )
 
         self.post_extract_proj = (
@@ -591,6 +598,7 @@ class Wav2Vec2Model(BaseFairseqModel):
     ):
 
         if self.feature_grad_mult > 0:
+            print(f"=============== source ===============\n{source}")  # DEBUG
             features = self.feature_extractor(source)
             if self.feature_grad_mult != 1.0:
                 features = GradMultiply.apply(features, self.feature_grad_mult)
@@ -823,6 +831,7 @@ class ConvFeatureExtractionModel(nn.Module):
         dropout: float = 0.0,
         mode: str = "default",
         conv_bias: bool = False,
+        in_d: int = 1,
     ):
         super().__init__()
 
@@ -838,7 +847,9 @@ class ConvFeatureExtractionModel(nn.Module):
             conv_bias=False,
         ):
             def make_conv():
-                conv = nn.Conv1d(n_in, n_out, k, stride=stride, bias=conv_bias)
+                # NOTE: Conv1dでいいんだっけ？？
+                # refer: https://stackoverflow.com/questions/42883547/intuitive-understanding-of-1d-2d-and-3d-convolutions-in-convolutional-neural-n
+                conv = nn.Conv2d(n_in, n_out, k, stride=stride, bias=conv_bias)
                 nn.init.kaiming_normal_(conv.weight)
                 return conv
 
@@ -867,11 +878,12 @@ class ConvFeatureExtractionModel(nn.Module):
             else:
                 return nn.Sequential(make_conv(), nn.Dropout(p=dropout), nn.GELU())
 
-        in_d = 1
+        # in_d = 1  # NOTE: inputの次元は引数で取るようにする
         self.conv_layers = nn.ModuleList()
         for i, cl in enumerate(conv_layers):
-            assert len(cl) == 3, "invalid conv definition: " + str(cl)
+            # assert len(cl) == 3, "invalid conv definition: " + str(cl)
             (dim, k, stride) = cl
+            print(f"=============== cl ===============\n{cl}")  # DEBUG
 
             self.conv_layers.append(
                 block(
@@ -898,7 +910,7 @@ class ConvFeatureExtractionModel(nn.Module):
 
 
 def make_conv_pos(e, k, g):
-    pos_conv = nn.Conv1d(
+    pos_conv = nn.Conv2d(
         e,
         e,
         kernel_size=k,
@@ -962,7 +974,7 @@ class TransformerEncoder(nn.Module):
                 return nn.Sequential(
                     *[
                         nn.Sequential(
-                            nn.Conv1d(
+                            nn.Conv2d(
                                 e,
                                 e,
                                 kernel_size=k,

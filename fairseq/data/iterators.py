@@ -331,6 +331,9 @@ class EpochBatchIterator(EpochBatchIterating):
             )
 
         if getattr(self.dataset, "supports_fetch_outside_dataloader", True):
+            # NOTE: ここでエラー
+            # collate_fn は dataset.collator なので w2v2 の場合 RawAudioDataset.collator
+            # ミニバッチごとに collate_fn に渡していく
             return self.collate_fn([self.dataset[i] for i in self.frozen_batches[0]])
         else:
             return "DUMMY"
